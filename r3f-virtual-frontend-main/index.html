@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="favicon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TherapyxAI — Your Wellness Companion</title>
+
+    <!-- Font preconnect — eliminates DNS + TLS latency before CSS loads -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!--
+      Display  → Cormorant Garamond (Light 300 + Light Italic 300, Regular 400 + Italic 400)
+                 Aristocratic thin strokes. Used only for headings ≥ 28px.
+      Body     → DM Sans (Light 300, Regular 400, Medium 500, Bold 700)
+                 Geometric but warm. Wider than Inter — easier on long reads.
+      Therapist → Lora Italic (400)
+                 Kept for AI voice bubbles — adds warmth, feels human.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=DM+Sans:wght@300;400;500;700&family=Lora:ital,wght@1,400&display=swap" rel="stylesheet" />
+
+    <!-- Meta Pixel Code -->
+    <script>
+      (function() {
+        const pixelId = 1727358921723761;
+        if (pixelId && pixelId !== "YOUR_META_PIXEL_ID_PLACEHOLDER" && (typeof pixelId !== 'string' || !pixelId.startsWith("%"))) {
+          !function(f,b,e,v,n,t,s)
+          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+          n.queue=[];t=b.createElement(e);t.async=!0;
+          t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s)}(window, document,'script',
+          'https://connect.facebook.net/en_US/fbevents.js');
+          fbq('init', pixelId);
+          fbq('track', 'PageView');
+        }
+      })();
+    </script>
+    <!-- End Meta Pixel Code -->
+     <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL2SVZ286D"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-FL2SVZ286D');
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <img height="1" width="1" style="display:none"
+           src="https://www.facebook.com/tr?id=1727358921723761&ev=PageView&noscript=1"/>
+    </noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

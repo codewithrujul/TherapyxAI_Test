@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Voice Test</title>
+</head>
+<body>
+    <h2>Voice Pipeline Test</h2>
+    <button id="start">Start Mic</button>
+    <button id="stop" disabled>Stop</button>
+    <p id="status">Ready</p>
+    <p id="transcript"></p>
+    <p id="response"></p>
+
+    <script>
+        const ws = new WebSocket("ws://localhost:8000/ws/voice");
+        let mediaRecorder;
+        let audioQueue = [];
+        let isPlaying = false;
+
+        ws.onopen = () => {
+            document.getElementById("status").innerText = "Connected!";
+        };
+
+        ws.onmessage = async (event) => {
+            const msg = JSON.parse(event.data);
+
+            switch (msg.type) {
+                case "status":
+                    document.getElementById("status").innerText = msg.text;
+                    break;
+
+                case "transcript":
+                    document.getElementById("transcript").innerText = "You: " + msg.text;
+                    break;
+
+                case "token":
+                    document.getElementById("response").innerText += msg.text;
+                    break;
+
+                case "audio":
+                    // decode base64 and play audio
+                    const binary = atob(msg.data);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) {
+                        bytes[i] = binary.charCodeAt(i);
+                    }
+                    const blob = new Blob([bytes], { type: "audio/wav" });
+                    const url = URL.createObjectURL(blob);
+                    audioQueue.push(url);
+                    if (!isPlaying) playNext();
+                    break;
+
+                case "done":
+                    document.getElementById("status").innerText = "Done!";
+                    break;
+
+                case "error":
+                    document.getElementById("status").innerText = "Error: " + msg.text;
+                    break;
+            }
+        };
+
+        // play audio queue one by one
+        function playNext() {
+            if (audioQueue.length === 0) {
+                isPlaying = false;
+                return;
+            }
+            isPlaying = true;
+            const url = audioQueue.shift();
+            const audio = new Audio(url);
+            audio.onended = playNext;
+            audio.play();
+        }
+
+        // start mic
+        document.getElementById("start").onclick = async () => {
+            document.getElementById("response").innerText = "";
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+
+            ws.send(JSON.stringify({ type: "speech_start" }));
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) ws.send(e.data);  // send binary chunk
+            };
+
+            mediaRecorder.start(300);  // send chunk every 300ms
+
+            document.getElementById("start").disabled = true;
+            document.getElementById("stop").disabled = false;
+            document.getElementById("status").innerText = "Listening...";
+        };
+
+        // stop mic
+        document.getElementById("stop").onclick = () => {
+            mediaRecorder.stop();
+            ws.send(JSON.stringify({ type: "end_of_speech" }));
+
+            document.getElementById("start").disabled = false;
+            document.getElementById("stop").disabled = true;
+            document.getElementById("status").innerText = "Processing...";
+        };
+    </script>
+</body>
+</html>

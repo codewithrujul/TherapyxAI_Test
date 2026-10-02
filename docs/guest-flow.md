@@ -1,0 +1,64 @@
+# Guest flow
+
+End-to-end flow for users who are NOT signed in. Source diagram: `guest-flow.mmd`.
+
+```mermaid
+flowchart TD
+  A(["Guest opens app<br/>NOT signed in"]) --> B["Enters a name<br/>in the guest name modal"]
+  B --> C{"guest_id already in<br/>browser localStorage?"}
+  C -- "No: first visit,<br/>new browser, incognito,<br/>or storage cleared" --> D["Create guest_id<br/>= random UUID<br/>save in localStorage"]
+  C -- "Yes: returning visit<br/>same browser" --> E["Reuse the SAME guest_id"]
+  D --> F
+  E --> F["Open WebSocket chat or voice<br/>send auth: guest_id, guest_name, language"]
+  F --> G["Backend builds guest key id<br/>guest_ + guest_id"]
+  G --> H[("sessions table<br/>NEW row every visit<br/>guest_id raw UUID, guest_name,<br/>language, start_time, status active")]
+  H --> I["Session lives in server memory<br/>no previous summary or memory<br/>loaded for guests"]
+  I --> J["Each turn: user types or speaks<br/>voice goes through speech-to-text"]
+  J --> K["AI replies<br/>Sarvam or Groq, then text or voice"]
+  K --> L{"STORE_GUEST_CHATS<br/>= true ?"}
+  L -- "No (default)" --> M["Nothing saved<br/>turn exists only in memory"]
+  L -- "Yes" --> N[("guest_chat_messages<br/>user_msg and ai_reply ENCRYPTED<br/>key from guest_ + guest_id<br/>session_id links to sessions")]
+  M --> O
+  N --> O{"Session over?"}
+  O -- "No" --> J
+  O -- "Yes: WebSocket closes<br/>or 3 min of silence" --> P["triggerSessionEnd<br/>guests cannot use the End API<br/>it needs a login"]
+  P --> Q[("sessions row updated<br/>end_time, duration, status completed")]
+  Q --> R["Guest extras skipped:<br/>no credits, no summary, no memories"]
+  R --> S{"ANALYSIS_ENABLED<br/>AND STORE_GUEST_CHATS<br/>both true ?"}
+  S -- "No (default)" --> T(["End: nothing more happens"])
+  S -- "Yes" --> U[("analysis_jobs<br/>status pending<br/>starts after 10 seconds")]
+  U --> V["Worker takes ONE job at a time"]
+  V --> W["Read guest_chat_messages<br/>decrypt with guest key"]
+  W --> X["HuggingFace Space<br/>4-class model plus suicide model"]
+  X --> Y[("session_analysis_summary<br/>and audit_log<br/>scores only, no message text")]
+  Y --> Z{"High risk<br/>flagged?"}
+  Z -- "Yes" --> Z1["Warning logged<br/>escalation NOT built yet"]
+  Z -- "No" --> Z2(["Done"])
+
+  R -.-> MC["Optional: mood check-out<br/>sent with guest_id, no login<br/>updates the guest's most recent session"]
+
+  T --> RV
+  Z1 --> RV
+  Z2 --> RV
+  RV["Guest comes back later"] --> C
+
+  RV -.-> SU["Guest signs up or logs in<br/>POST /auth/link-guest with guest_id"]
+  SU --> LK["sessions rows move to the new account<br/>guest_id and guest_name cleared<br/>localStorage guest keys removed"]
+  LK --> LK2["guest_chat_messages stay encrypted<br/>with the OLD guest key<br/>and do NOT show in account history"]
+
+  N -.-> RT["Retention: purge_old_guest_chat_messages<br/>manual only, not scheduled<br/>decision pending"]
+
+  classDef db fill:#e8f0fe,stroke:#4a6fdc,color:#111;
+  classDef gated fill:#fff4d6,stroke:#d19a00,color:#111;
+  classDef warn fill:#fde8e8,stroke:#d04a4a,color:#111;
+  classDef note fill:#f1f1f1,stroke:#888,color:#111,stroke-dasharray: 4 3;
+  class H,N,Q,U,Y db;
+  class L,S gated;
+  class Z1 warn;
+  class MC,RT,LK2 note;
+
+```
+
+## Legend
+- Blue cylinders: database tables. Yellow diamonds: settings that switch behavior on or off (both **off by default**). Red: not built yet. Dashed grey: side notes.
+- `sessions.guest_id` stores the raw UUID; `guest_chat_messages.guest_id` and the encryption key use `guest_` + that UUID.

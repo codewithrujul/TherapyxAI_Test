@@ -1,0 +1,18 @@
+**/node_modules
+**/*.log
+voice_AVGF (Recent One)zip/
+voice_AVGF (Recent One)zip.zip
+r3f-virtual-girlfriend-backend-main/myenv/
+**/myenv/
+
+
+.claude
+
+# ML experiments: trained models, venv, datasets, logs (large / not source code)
+.scratch/
+training_bundle.zip
+
+# Secrets: never commit real env files (Backend/.env is still tracked -- see notes; ignoring alone doesn't untrack it)
+**/.env
+**/.env.local
+**/.env.production

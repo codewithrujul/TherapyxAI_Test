@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Assistant</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 560px;
+      padding: 2rem 1rem;
+      gap: 0;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 2rem;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px 32px;
+      background: transparent;
+      border: none;
+      color: #555;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .tab-btn.active {
+      background: #1a1a1a;
+      color: #e8e8e8;
+    }
+
+    /* ── Panels ── */
+    .panel { display: none; width: 100%; flex-direction: column; align-items: center; gap: 0; }
+    .panel.active { display: flex; }
+
+    /* ── Status label ── */
+    .status-label {
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+      height: 18px;
+      margin-bottom: 2rem;
+      transition: color 0.3s;
+    }
+
+    .state-listening .status-label { color: #1D9E75; }
+    .state-processing .status-label { color: #888; }
+    .state-streaming .status-label { color: #378ADD; }
+
+    /* ── Mic button ── */
+    .mic-wrap {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    .ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1.5px solid #2a2a2a;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+
+    .ring-pulse {
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 1px solid transparent;
+    }
+
+    .state-listening .ring { border-color: #1D9E75; transform: scale(1.04); }
+    .state-listening .ring-pulse { border-color: rgba(29, 158, 117, 0.35); animation: pulse 1.4s ease-out infinite; }
+    .state-streaming .ring { border-color: #378ADD; transform: scale(1.04); }
+    .state-streaming .ring-pulse { border-color: rgba(55, 138, 221, 0.3); animation: pulse 1.8s ease-out infinite; }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    .mic-btn {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, border-color 0.2s, transform 0.12s;
+      position: relative;
+      z-index: 1;
+      outline: none;
+    }
+
+    .mic-btn:hover { background: #222; border-color: #444; }
+    .mic-btn:active { transform: scale(0.95); }
+    .state-listening .mic-btn { background: #1D9E75; border-color: #1D9E75; }
+    .state-streaming .mic-btn { background: #1a1a1a; border-color: #2e2e2e; cursor: default; }
+
+    .icon-mic, .icon-wave { display: none; pointer-events: none; }
+    .state-idle .icon-mic { display: block; }
+    .state-listening .icon-mic { display: block; }
+    .state-processing .icon-mic { display: block; }
+    .state-streaming .icon-wave { display: flex; align-items: center; gap: 3px; }
+    .state-listening .icon-mic svg { color: #fff; }
+    .state-processing .icon-mic svg { opacity: 0.4; }
+
+    .wave-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: #378ADD;
+      animation: wave 1s ease-in-out infinite;
+    }
+    .wave-bar:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .wave-bar:nth-child(2) { height: 20px; animation-delay: 0.12s; }
+    .wave-bar:nth-child(3) { height: 28px; animation-delay: 0.24s; }
+    .wave-bar:nth-child(4) { height: 20px; animation-delay: 0.36s; }
+    .wave-bar:nth-child(5) { height: 10px; animation-delay: 0.48s; }
+
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.55); }
+      50% { transform: scaleY(1); }
+    }
+
+    /* ── Chat bubbles (shared) ── */
+    .chat-area {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 80px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.6;
+      max-width: 86%;
+      opacity: 0;
+      transform: translateY(5px);
+      transition: opacity 0.22s, transform 0.22s;
+    }
+
+    .bubble.show { opacity: 1; transform: translateY(0); }
+    .bubble.user { background: #1f1f1f; color: #ccc; align-self: flex-end; border: 1px solid #2e2e2e; }
+    .bubble.assistant { background: #0d2035; color: #7ec8f5; align-self: flex-start; border: 1px solid #1a3a55; }
+
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 13px;
+      background: #378ADD;
+      margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 0.85s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1 }
+      50% { opacity: 0 }
+    }
+
+    /* ── Hint ── */
+    .hint {
+      font-size: 12px;
+      color: #444;
+      margin-top: 1.5rem;
+      text-align: center;
+      min-height: 18px;
+      transition: color 0.3s;
+    }
+
+    .interrupt-hint {
+      font-size: 11px;
+      color: #444;
+      opacity: 0;
+      transition: opacity 0.3s;
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    .state-streaming .interrupt-hint { opacity: 1; }
+
+    /* ── Chat input ── */
+    .chat-input-wrap {
+      display: flex;
+      width: 100%;
+      gap: 8px;
+      margin-top: 1.5rem;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: #e8e8e8;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input:focus { border-color: #378ADD; }
+    .chat-input::placeholder { color: #444; }
+
+    .chat-send-btn {
+      background: #378ADD;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 18px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.12s;
+    }
+
+    .chat-send-btn:hover { background: #2a6fb5; }
+    .chat-send-btn:active { transform: scale(0.95); }
+    .chat-send-btn:disabled { background: #2a2a2a; color: #555; cursor: default; }
+
+    .chat-status {
+      font-size: 12px;
+      color: #555;
+      margin-top: 8px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      min-height: 16px;
+      align-self: flex-start;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-voice" onclick="switchTab('voice')">🎙 Voice</button>
+      <button class="tab-btn" id="tab-chat" onclick="switchTab('chat')">💬 Chat</button>
+    </div>
+
+    <!-- ── VOICE PANEL ── -->
+    <div class="panel active state-idle" id="voice-panel">
+
+      <div class="status-label" id="va-status">Ready</div>
+
+      <div class="mic-wrap">
+        <div class="ring-pulse"></div>
+        <div class="ring"></div>
+        <button class="mic-btn" id="va-btn" aria-label="Start speaking">
+          <div class="icon-mic">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#888">
+              <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" />
+              <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" />
+              <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </div>
+          <div class="icon-wave">
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+        </button>
+      </div>
+
+      <div class="chat-area" id="va-chat"></div>
+      <div class="interrupt-hint">speak to interrupt</div>
+      <div class="hint" id="va-hint">Click the mic and start talking</div>
+
+    </div>
+
+    <!-- ── CHAT PANEL ── -->
+    <div class="panel" id="chat-panel">
+
+      <div class="chat-area" id="chat-area"></div>
+      <div class="chat-status" id="chat-status"></div>
+
+      <div class="chat-input-wrap">
+        <input
+          class="chat-input"
+          id="chat-input"
+          type="text"
+          placeholder="Type a message..."
+          autocomplete="off"
+        />
+        <button class="chat-send-btn" id="chat-send-btn">Send</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────
+    // CONFIG
+    // ─────────────────────────────────────────────
+    const VOICE_WS_URL = 'ws://localhost:8000/ws/voice';
+    const CHAT_WS_URL  = 'ws://localhost:8000/ws/chat';
+
+    const SILENCE_THRESHOLD = 15;
+    const SILENCE_MS        = 1500;
+    const VAD_INTERVAL_MS   = 100;
+
+    // ─────────────────────────────────────────────
+    // TAB SWITCHER
+    // ─────────────────────────────────────────────
+    function switchTab(tab) {
+      document.getElementById('tab-voice').classList.toggle('active', tab === 'voice');
+      document.getElementById('tab-chat').classList.toggle('active', tab === 'chat');
+      document.getElementById('voice-panel').classList.toggle('active', tab === 'voice');
+      document.getElementById('chat-panel').classList.toggle('active', tab === 'chat');
+
+      // connect chat WS lazily when tab opens
+      if (tab === 'chat' && (!chatWs || chatWs.readyState !== WebSocket.OPEN)) {
+        connectChatWS();
+      }
+    }
+
+    // ─────────────────────────────────────────────
+    // SHARED BUBBLE HELPER
+    // ─────────────────────────────────────────────
+    function addBubble(areaId, role, text) {
+      const area = document.getElementById(areaId);
+      const b = document.createElement('div');
+      b.className = 'bubble ' + role;
+      b.textContent = text;
+      area.appendChild(b);
+      requestAnimationFrame(() => b.classList.add('show'));
+      area.scrollTop = area.scrollHeight;
+      return b;
+    }
+
+    // ─────────────────────────────────────────────
+    // SHARED AUDIO PLAYER
+    // ─────────────────────────────────────────────
+    let audioCtx = null;
+
+    async function playBase64Audio(b64) {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const buf = await audioCtx.decodeAudioData(bytes.buffer);
+      return new Promise(resolve => {
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.onended = resolve;
+        src.start();
+      });
+    }
+
+    // ═════════════════════════════════════════════
+    // VOICE SECTION (your original code, unchanged)
+    // ═════════════════════════════════════════════
+    let t = {};
+    let ws = null;
+    let mediaRecorder = null;
+    let voiceAudioCtx = null;
+    let analyser = null;
+    let vadInterval = null;
+    let silenceTimer = null;
+    let isSpeaking = false;
+    let audioQueue = [];
+    let isPlayingAudio = false;
+    let currentBubble = null;
+    let currentCursor = null;
+    let currentStream = null;
+
+    const voicePanel = document.getElementById('voice-panel');
+    const btn        = document.getElementById('va-btn');
+    const statusEl   = document.getElementById('va-status');
+    const vaChatArea = document.getElementById('va-chat');
+    const hintEl     = document.getElementById('va-hint');
+
+    function setState(s) {
+      voicePanel.className = 'panel active state-' + s;
+      const labels = { idle: 'Ready', listening: 'Listening…', processing: 'Thinking…', streaming: 'Speaking…' };
+      statusEl.textContent = labels[s] || s;
+      if (s === 'idle') hintEl.textContent = 'Click the mic and start talking';
+      else if (s === 'listening') hintEl.textContent = 'Speak now — auto-sends on silence';
+      else hintEl.textContent = '';
+    }
+
+    function startAssistantBubble() {
+      currentBubble = addBubble('va-chat', 'assistant', '');
+      currentCursor = document.createElement('span');
+      currentCursor.className = 'cursor';
+      currentBubble.appendChild(currentCursor);
+    }
+
+    function appendToken(token) {
+      if (!currentBubble) startAssistantBubble();
+      let textNode = null;
+      for (const node of currentBubble.childNodes) {
+        if (node.nodeType === 3) { textNode = node; break; }
+      }
+      if (textNode) textNode.nodeValue += token;
+      else currentBubble.insertBefore(document.createTextNode(token), currentCursor);
+      vaChatArea.scrollTop = vaChatArea.scrollHeight;
+    }
+
+    function finishAssistantBubble() {
+      if (currentCursor) { currentCursor.remove(); currentCursor = null; }
+      currentBubble = null;
+    }
+
+    async function drainAudioQueue() {
+      if (isPlayingAudio) return;
+      isPlayingAudio = true;
+      while (audioQueue.length > 0 && voicePanel.className.includes('streaming')) {
+        const { data } = audioQueue.shift();
+        try { await playBase64Audio(data); } catch (e) { console.error('audio play error', e); }
+      }
+      isPlayingAudio = false;
+    }
+
+    function stopAllAudio() {
+      audioQueue = [];
+      isPlayingAudio = false;
+    }
+
+    function connectWS() {
+      return new Promise((resolve, reject) => {
+        ws = new WebSocket(VOICE_WS_URL);
+        ws.onopen = () => resolve();
+        ws.onerror = () => reject(new Error('WebSocket connection failed'));
+
+        ws.onmessage = (evt) => {
+          const msg = JSON.parse(evt.data);
+          switch (msg.type) {
+            case 'pong': break;
+            case 'status':
+              if (msg.text === 'Transcribing...' || msg.text === 'Thinking...') setState('processing');
+              break;
+            case 'transcript':
+              t.transcriptReceived = Date.now();
+              console.log(`STT latency: ${t.transcriptReceived - t.speechEnd}ms`);
+              addBubble('va-chat', 'user', msg.text);
+              break;
+            case 'token':
+              if (!t.firstToken) {
+                t.firstToken = Date.now();
+                console.log(`Time to first token: ${t.firstToken - t.speechEnd}ms`);
+              }
+              if (!voicePanel.className.includes('streaming')) {
+                setState('streaming');
+                startAssistantBubble();
+              }
+              appendToken(msg.text);
+              break;
+            case 'audio':
+              if (!t.firstAudio) { t.firstAudio = Date.now(); }
+              audioQueue.push({ data: msg.data });
+              drainAudioQueue();
+              break;
+            case 'done':
+              t.done = Date.now();
+              console.table({
+                'STT': `${t.transcriptReceived - t.speechEnd}ms`,
+                'LLM first token': `${t.firstToken - t.transcriptReceived}ms`,
+                'TTS first audio': `${t.firstAudio ? t.firstAudio - t.transcriptReceived : 'no audio'}ms`,
+                'Total': `${t.done - t.speechEnd}ms`,
+              });
+              t = {};
+              finishAssistantBubble();
+              stopAllAudio();
+              setTimeout(() => { setState('idle'); startListening(); }, 500);
+              break;
+            case 'error':
+              console.error('Backend error:', msg.text);
+              finishAssistantBubble();
+              setState('idle');
+              hintEl.textContent = 'Error — click mic to retry';
+              break;
+          }
+        };
+
+        ws.onclose = () => { ws = null; if (!voicePanel.className.includes('idle')) setState('idle'); };
+      });
+    }
+
+    function clearVAD() {
+      clearInterval(vadInterval); vadInterval = null;
+      clearTimeout(silenceTimer); silenceTimer = null;
+      isSpeaking = false;
+    }
+
+    function stopMic() {
+      clearVAD();
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+    }
+
+    function sendEndOfSpeech() {
+      t.speechEnd = Date.now();
+      stopMic();
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'end_of_speech' }));
+      setState('processing');
+    }
+
+    async function startListening() {
+      if (voicePanel.className.includes('listening')) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        try { await connectWS(); } catch (e) { hintEl.textContent = 'Cannot connect to backend at ' + VOICE_WS_URL; return; }
+      }
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch (e) { hintEl.textContent = 'Microphone permission denied'; return; }
+      currentStream = stream;
+
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+      ws.send(JSON.stringify({ type: 'speech_start' }));
+      setState('listening');
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+          e.data.arrayBuffer().then(buf => ws.send(buf));
+        }
+      };
+      mediaRecorder.start(250);
+
+      isSpeaking = false;
+      silenceTimer = null;
+      vadInterval = setInterval(() => {
+        analyser.getByteFrequencyData(freqData);
+        const avg = freqData.reduce((a, b) => a + b, 0) / freqData.length;
+        if (avg > SILENCE_THRESHOLD) {
+          isSpeaking = true;
+          if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+        } else if (isSpeaking) {
+          if (!silenceTimer) silenceTimer = setTimeout(() => sendEndOfSpeech(), SILENCE_MS);
+        }
+      }, VAD_INTERVAL_MS);
+    }
+
+    function interruptAndListen() {
+      stopAllAudio();
+      finishAssistantBubble();
+      stopMic();
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'speech_start' }));
+      startListening();
+    }
+
+    btn.addEventListener('click', () => {
+      const s = voicePanel.className;
+      if (s.includes('idle')) startListening();
+      else if (s.includes('listening')) sendEndOfSpeech();
+      else if (s.includes('streaming')) interruptAndListen();
+    });
+
+    // ═════════════════════════════════════════════
+    // CHAT SECTION
+    // ═════════════════════════════════════════════
+    let chatWs = null;
+    let chatBubble = null;
+    let chatCursor = null;
+    let chatAudioQueue = [];
+    let isChatPlayingAudio = false;
+    let isChatWaiting = false;
+
+    const chatArea      = document.getElementById('chat-area');
+    const chatInput     = document.getElementById('chat-input');
+    const chatSendBtn   = document.getElementById('chat-send-btn');
+    const chatStatusEl  = document.getElementById('chat-status');
+
+    function setChatStatus(text) { chatStatusEl.textContent = text; }
+
+    function startChatAssistantBubble() {
+      chatBubble = addBubble('chat-area', 'assistant', '');
+      chatCursor = document.createElement('span');
+      chatCursor.className = 'cursor';
+      chatBubble.appendChild(chatCursor);
+    }
+
+    function appendChatToken(token) {
+      if (!chatBubble) startChatAssistantBubble();
+      let textNode = null;
+      for (const node of chatBubble.childNodes) {
+        if (node.nodeType === 3) { textNode = node; break; }
+      }
+      if (textNode) textNode.nodeValue += token;
+      else chatBubble.insertBefore(document.createTextNode(token), chatCursor);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function finishChatBubble() {
+      if (chatCursor) { chatCursor.remove(); chatCursor = null; }
+      chatBubble = null;
+    }
+
+    async function drainChatAudioQueue() {
+      if (isChatPlayingAudio) return;
+      isChatPlayingAudio = true;
+      while (chatAudioQueue.length > 0) {
+        const b64 = chatAudioQueue.shift();
+        try { await playBase64Audio(b64); } catch (e) { console.error('chat audio error', e); }
+      }
+      isChatPlayingAudio = false;
+    }
+
+    function connectChatWS() {
+      chatWs = new WebSocket(CHAT_WS_URL);
+
+      chatWs.onopen = () => setChatStatus('Connected');
+
+      chatWs.onmessage = (evt) => {
+        const msg = JSON.parse(evt.data);
+        switch (msg.type) {
+          case 'status':
+            setChatStatus(msg.text);
+            break;
+
+          case 'token':
+            if (!chatBubble) {
+              startChatAssistantBubble();
+              setChatStatus('Responding...');
+            }
+            appendChatToken(msg.text);
+            break;
+
+          case 'audio':
+            chatAudioQueue.push(msg.data);
+            drainChatAudioQueue();
+            break;
+
+          case 'done':
+            finishChatBubble();
+            setChatStatus('');
+            chatSendBtn.disabled = false;
+            chatInput.disabled = false;
+            chatInput.focus();
+            isChatWaiting = false;
+            break;
+
+          case 'error':
+            console.error('Chat error:', msg.text);
+            finishChatBubble();
+            setChatStatus('Error — try again');
+            chatSendBtn.disabled = false;
+            chatInput.disabled = false;
+            isChatWaiting = false;
+            break;
+        }
+      };
+
+      chatWs.onclose = () => { chatWs = null; setChatStatus('Disconnected'); };
+      chatWs.onerror = () => setChatStatus('Connection failed — check backend');
+    }
+
+    function sendChatMessage() {
+      const text = chatInput.value.trim();
+      if (!text || isChatWaiting) return;
+
+      if (!chatWs || chatWs.readyState !== WebSocket.OPEN) {
+        setChatStatus('Reconnecting...');
+        connectChatWS();
+        setTimeout(() => sendChatMessage(), 500);
+        return;
+      }
+
+      // show user bubble
+      addBubble('chat-area', 'user', text);
+      chatInput.value = '';
+
+      // disable input while waiting
+      chatSendBtn.disabled = true;
+      chatInput.disabled = true;
+      isChatWaiting = true;
+      chatAudioQueue = [];
+      setChatStatus('Thinking...');
+
+      // send to backend
+      chatWs.send(JSON.stringify({ type: 'chat_message', text }));
+    }
+
+    // send on button click
+    chatSendBtn.addEventListener('click', sendChatMessage);
+
+    // send on Enter key
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+  </script>
+</body>
+
+</html>

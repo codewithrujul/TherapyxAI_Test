@@ -1,0 +1,31 @@
+<!-- Chat test -->
+<hr>
+<h2>Chat Test</h2>
+<input id="chatInput" type="text" placeholder="Type message..." />
+<button id="sendChat">Send</button>
+<p id="chatResponse"></p>
+
+<script>
+    const chatWs = new WebSocket("ws://localhost:8000/ws/chat");
+
+    chatWs.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "token") {
+            console.log("Received token:", msg.text);
+            document.getElementById("chatResponse").innerText += msg.text;
+        }
+        if (msg.type === "audio") {
+            const binary = atob(msg.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "audio/wav" });
+            new Audio(URL.createObjectURL(blob)).play();
+        }
+    };
+
+    document.getElementById("sendChat").onclick = () => {
+        const text = document.getElementById("chatInput").value;
+        document.getElementById("chatResponse").innerText = "";
+        chatWs.send(JSON.stringify({ type: "chat_message", text }));
+    };
+</script>

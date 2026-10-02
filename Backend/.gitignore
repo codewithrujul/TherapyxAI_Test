@@ -1,0 +1,20 @@
+# Environment — contains real API keys, must NEVER be committed
+.env
+.env.local
+.env.production
+
+
+# Compiled output
+dist/
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

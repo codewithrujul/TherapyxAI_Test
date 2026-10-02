@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Guest flow</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;background:#fff;color:#111}
+  h1{font-size:22px;margin:0 0 4px} p{margin:4px 0 16px;color:#444;font-size:14px}
+  .legend{font-size:13px;color:#333;margin-top:18px;line-height:1.7}
+  .sw{display:inline-block;width:14px;height:14px;border:1px solid #555;vertical-align:-2px;margin-right:6px}
+  pre.mermaid{overflow:auto}
+</style></head><body>
+<h1>Guest flow</h1>
+<p>What happens from the moment a not-signed-in user opens the app, through storage, analysis, return visits and sign-up.</p>
+<pre class="mermaid">
+flowchart TD
+  A(["Guest opens app&lt;br/&gt;NOT signed in"]) --&gt; B["Enters a name&lt;br/&gt;in the guest name modal"]
+  B --&gt; C{"guest_id already in&lt;br/&gt;browser localStorage?"}
+  C -- "No: first visit,&lt;br/&gt;new browser, incognito,&lt;br/&gt;or storage cleared" --&gt; D["Create guest_id&lt;br/&gt;= random UUID&lt;br/&gt;save in localStorage"]
+  C -- "Yes: returning visit&lt;br/&gt;same browser" --&gt; E["Reuse the SAME guest_id"]
+  D --&gt; F
+  E --&gt; F["Open WebSocket chat or voice&lt;br/&gt;send auth: guest_id, guest_name, language"]
+  F --&gt; G["Backend builds guest key id&lt;br/&gt;guest_ + guest_id"]
+  G --&gt; H[("sessions table&lt;br/&gt;NEW row every visit&lt;br/&gt;guest_id raw UUID, guest_name,&lt;br/&gt;language, start_time, status active")]
+  H --&gt; I["Session lives in server memory&lt;br/&gt;no previous summary or memory&lt;br/&gt;loaded for guests"]
+  I --&gt; J["Each turn: user types or speaks&lt;br/&gt;voice goes through speech-to-text"]
+  J --&gt; K["AI replies&lt;br/&gt;Sarvam or Groq, then text or voice"]
+  K --&gt; L{"STORE_GUEST_CHATS&lt;br/&gt;= true ?"}
+  L -- "No (default)" --&gt; M["Nothing saved&lt;br/&gt;turn exists only in memory"]
+  L -- "Yes" --&gt; N[("guest_chat_messages&lt;br/&gt;user_msg and ai_reply ENCRYPTED&lt;br/&gt;key from guest_ + guest_id&lt;br/&gt;session_id links to sessions")]
+  M --&gt; O
+  N --&gt; O{"Session over?"}
+  O -- "No" --&gt; J
+  O -- "Yes: WebSocket closes&lt;br/&gt;or 3 min of silence" --&gt; P["triggerSessionEnd&lt;br/&gt;guests cannot use the End API&lt;br/&gt;it needs a login"]
+  P --&gt; Q[("sessions row updated&lt;br/&gt;end_time, duration, status completed")]
+  Q --&gt; R["Guest extras skipped:&lt;br/&gt;no credits, no summary, no memories"]
+  R --&gt; S{"ANALYSIS_ENABLED&lt;br/&gt;AND STORE_GUEST_CHATS&lt;br/&gt;both true ?"}
+  S -- "No (default)" --&gt; T(["End: nothing more happens"])
+  S -- "Yes" --&gt; U[("analysis_jobs&lt;br/&gt;status pending&lt;br/&gt;starts after 10 seconds")]
+  U --&gt; V["Worker takes ONE job at a time"]
+  V --&gt; W["Read guest_chat_messages&lt;br/&gt;decrypt with guest key"]
+  W --&gt; X["HuggingFace Space&lt;br/&gt;4-class model plus suicide model"]
+  X --&gt; Y[("session_analysis_summary&lt;br/&gt;and audit_log&lt;br/&gt;scores only, no message text")]
+  Y --&gt; Z{"High risk&lt;br/&gt;flagged?"}
+  Z -- "Yes" --&gt; Z1["Warning logged&lt;br/&gt;escalation NOT built yet"]
+  Z -- "No" --&gt; Z2(["Done"])
+
+  R -.-&gt; MC["Optional: mood check-out&lt;br/&gt;sent with guest_id, no login&lt;br/&gt;updates the guest's most recent session"]
+
+  T --&gt; RV
+  Z1 --&gt; RV
+  Z2 --&gt; RV
+  RV["Guest comes back later"] --&gt; C
+
+  RV -.-&gt; SU["Guest signs up or logs in&lt;br/&gt;POST /auth/link-guest with guest_id"]
+  SU --&gt; LK["sessions rows move to the new account&lt;br/&gt;guest_id and guest_name cleared&lt;br/&gt;localStorage guest keys removed"]
+  LK --&gt; LK2["guest_chat_messages stay encrypted&lt;br/&gt;with the OLD guest key&lt;br/&gt;and do NOT show in account history"]
+
+  N -.-&gt; RT["Retention: purge_old_guest_chat_messages&lt;br/&gt;manual only, not scheduled&lt;br/&gt;decision pending"]
+
+  classDef db fill:#e8f0fe,stroke:#4a6fdc,color:#111;
+  classDef gated fill:#fff4d6,stroke:#d19a00,color:#111;
+  classDef warn fill:#fde8e8,stroke:#d04a4a,color:#111;
+  classDef note fill:#f1f1f1,stroke:#888,color:#111,stroke-dasharray: 4 3;
+  class H,N,Q,U,Y db;
+  class L,S gated;
+  class Z1 warn;
+  class MC,RT,LK2 note;
+
+</pre>
+<div class="legend">
+  <div><span class="sw" style="background:#e8f0fe;border-color:#4a6fdc"></span>Database table</div>
+  <div><span class="sw" style="background:#fff4d6;border-color:#d19a00"></span>Switch (STORE_GUEST_CHATS / ANALYSIS_ENABLED). Both are OFF by default.</div>
+  <div><span class="sw" style="background:#fde8e8;border-color:#d04a4a"></span>Not built yet</div>
+  <div><span class="sw" style="background:#f1f1f1;border-color:#888"></span>Side note</div>
+  <div style="margin-top:8px">sessions.guest_id stores the raw UUID. guest_chat_messages.guest_id and the encryption key use "guest_" + that UUID.</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true, theme:'neutral', securityLevel:'loose', flowchart:{useMaxWidth:false, htmlLabels:true, curve:'basis'}});</script>
+</body></html>
